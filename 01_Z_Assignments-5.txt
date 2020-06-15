@@ -1,0 +1,74 @@
+We have to set up automation to pull down a data file, from a notoriously unreliable third-party system, for integration purposes. 
+Create a playbook that attempts to pull down http://apps.l33t.com/transaction_list to localhost. 
+The playbook should gracefully handle the site being down by outputting the message "l33t.com appears to be down. Try again later." to stdout. 
+If the task succeeds, the playbook should write "File downloaded." to stdout. No matter if the playbook errors or not, it should always output "Attempt completed." to stdout.
+
+If the report is collected, the playbook should write and edit the file to replace all occurrences of #BLANKLINE with a line break \n.
+
+Tasks list summary:
+
+1. Create a playbook, /home/ansible/report.yml.
+2. Configure the playbook to download http://apps.l33t.com/transaction_list to /home/ansible/transaction_list on localhost 3. and output "File downloaded." to stdout.
+4. Configure the playbook to handle connection failure by outputting "l33t.com appears to be down. Try again later." to stdout.
+5. Configure the playbook to output "Attempt Completed" to stdout, whether it was successful or not.
+6. Configure the playbook to replace all instances of #BLANKLINE with the line break character \n.
+7. Run the playbook using the default inventory to verify whether things work or not.
+
+
+Important notes:
+Create 2 servers, 1 control and another as node
+Install Ansible on the control node.
+Create user ansible on all servers, with appropriate shared keys for access to the necessary servers from the control node.
+apps.l33t.com is unavailable by default.
+We may force a state change by running change_l33t.sh available at https://github.com/satyensingh/ansible-assignments-scripts.git.
+
+-------------------------
+[ansible@ansible-server ~]$ vi report.yml
+
+---
+- hosts: host1
+  tasks:
+    - name: Downloading the transaction_list file
+      block:
+        - get_url:
+            url: http://apps.l33t.com/transaction_list
+            dest: /home/ubuntu/transaction_list
+        - debug: msg="File downloaded"
+        - replace:
+            path: /home/ubuntu/transaction_list
+            regexp: "#BLANKLINE"
+            replace: '\n'
+      rescue:
+        - debug: msg="l33t.com appears to be down. Try again later."
+      always:
+        - debug: msg="Attempt completed."
+
+
+
+[ansible@ansible-server ~]$ ansible-playbook report.yml
+
+PLAY [host1] *******************************************************************************************************************************
+
+TASK [Gathering Facts] *********************************************************************************************************************
+[DEPRECATION WARNING]: Distribution Ubuntu 18.04 on host host1 should use /usr/bin/python3, but is using /usr/bin/python for backward 
+compatibility with prior Ansible releases. A future Ansible release will default to using the discovered platform python for this host. See
+ https://docs.ansible.com/ansible/2.9/reference_appendices/interpreter_discovery.html for more information. This feature will be removed in
+ version 2.12. Deprecation warnings can be disabled by setting deprecation_warnings=False in ansible.cfg.
+ok: [host1]
+
+TASK [get_url] *****************************************************************************************************************************
+fatal: [host1]: FAILED! => {"changed": false, "dest": "/home/ubuntu/transaction_list", "elapsed": 0, "msg": "Request failed", "response": "HTTP Error 404: Not Found", "status_code": 404, "url": "http://apps.l33t.com/transaction_list"}
+
+TASK [debug] *******************************************************************************************************************************
+ok: [host1] => {
+    "msg": "l33t.com appears to be down.  Try again later."
+}
+
+TASK [debug] *******************************************************************************************************************************
+ok: [host1] => {
+    "msg": "Attempt completed."
+}
+
+PLAY RECAP *********************************************************************************************************************************
+host1                      : ok=3    changed=0    unreachable=0    failed=0    skipped=0    rescued=1    ignored=0   
+

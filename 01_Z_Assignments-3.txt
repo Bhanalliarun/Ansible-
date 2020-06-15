@@ -1,0 +1,145 @@
+Learning Objectives:-
+1. Create the User Accounts as mentioned below:-
+
+-------------------------------------------------------------------------------------------------------------
+userlist
+-------------------------------------------------------------------------------------------------------------
+# Please create the the below users on all hosts in dbsystems
+# You will find a pregenerated key pair and an authorized key file for each user in /home/ansible/keys
+
+# User accounts to create:
+consultant
+supervisor
+-------------------------------------------------------------------------------------------------------------
+
+2. Place Key Files in the Correct Location, `/home/$USER/.ssh/authorized_keys`, on Hosts in `dbsystems`
+3. Ensure `auditd` Is Enabled and Running on All Hosts
+
+
+Additional Information:-
+Some consultants have been employed to perform audits on a number of systems in your company's environment. You must create the user accounts noted in the baove userlist and set up the provided public keys for their accounts. The security team has built a jump host for the consultants to access production systems and provided the full key-pair to you so you may set up and test the connection. All hosts in dbsystems will need the provided public key installed so the consultants may use key-pair authentication to access the systems. Also, you must ensure the auditd service is enabled and running on all systems.
+
+To summarize, you must do the following:-
+
+Create the user accounts noted in userlist.
+Copy the authorized_keys file for each user to the correct location so the new accounts can log in with ssh key authentication.
+Ensure auditd is enabled and running on all systems.
+
+
+
+Important notes:-
+Ansible must be installed and configured on the control node. If you connect to the server by clicking on the Public IP address in your browser, make sure to change to the ansible user with the su - ansible command.
+The user ansible must also be present on all servers with appropriate shared keys for access to managed servers from the control node. Make sure to use this user to complete the commands.
+The default Ansible inventory must be configured with the appropriate hosts and groups.
+/etc/hosts entries must be present on control1 for the managed servers.
+
+------------------------------------
+solution
+
+[ansible@ansible-server ~]$ cat user.yaml
+---
+- name: Add the user 'consultant & supervisor' with a bash shell
+  hosts: all
+  become: true
+  tasks:
+  - name: Adding user name 'consultant'
+    user:
+      name: consultant
+      generate_ssh_key: yes
+      shell: /bin/bash
+      ssh_key_file: .ssh/id_rsa
+      comment: Ansible DB user id consultant
+
+  - name: Adding user name 'supervisor'
+    user:
+      name: supervisor
+      generate_ssh_key: yes
+      shell: /bin/bash
+      ssh_key_file: .ssh/id_rsa
+      comment: Ansible DB user id supervisor
+
+
+  - name: Set authorized key for user 'consultant and supervisor' copying it from current user
+    authorized_key:
+      user: consultant
+      state: present
+      key: "{{ lookup('file', lookup('env','HOME') + '/.ssh/id_rsa.pub') }}"
+
+    authorized_key:
+      user: supervisor
+      state: present
+      key: "{{ lookup('file', lookup('env','HOME') + '/.ssh/id_rsa.pub') }}"
+
+  - name: Enable and start auditd
+    service:
+        name: auditd
+        state: started
+        enabled: yes
+[ansible@ansible-server ~]$
+
+
+
+
+[ansible@ansible-server ~]$ ansible-playbook user.yaml --limit node1
+[WARNING]: While constructing a mapping from /home/ansible/user.yaml, line 23, column 5, found a duplicate dict key (authorized_key). Using
+last defined value only.
+
+PLAY [Add the user 'consultant & supervisor' with a bash shell] ******************************************************************************
+
+TASK [Gathering Facts] ***********************************************************************************************************************
+ok: [node1]
+
+TASK [Adding user name 'consultant'] *********************************************************************************************************
+ok: [node1]
+
+TASK [Adding user name 'supervisor'] *********************************************************************************************************
+ok: [node1]
+
+TASK [Set authorized key for user 'consultant and supervisor' copying it from current user] **************************************************
+ok: [node1]
+
+TASK [Enable and start auditd] ***************************************************************************************************************
+ok: [node1]
+
+PLAY RECAP ***********************************************************************************************************************************
+node1                      : ok=5    changed=4    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0
+
+[ansible@ansible-server ~]$
+
+[ansible@node-1 ~]$ id consultant
+uid=1002(consultant) gid=1002(consultant) groups=1002(consultant)
+[ansible@node-1 ~]$
+[ansible@node-1 ~]$ id supervisor
+uid=1003(supervisor) gid=1003(supervisor) groups=1003(supervisor)
+[ansible@node-1 ~]$
+
+[consultant@node-1 .ssh]$ ls -ltrh
+total 12K
+-rw-r--r-- 1 consultant consultant  409 Jun 14 10:11 id_rsa.pub
+-rw------- 1 consultant consultant 1.7K Jun 14 10:11 id_rsa
+-rw------- 1 consultant consultant  404 Jun 14 10:49 authorized_keys
+[consultant@node-1 .ssh]$
+
+
+[supervisor@node-1 .ssh]$ ls -tlrh
+total 12K
+-rw-r--r-- 1 supervisor supervisor  409 Jun 14 10:26 id_rsa.pub
+-rw------- 1 supervisor supervisor 1.7K Jun 14 10:26 id_rsa
+-rw------- 1 supervisor supervisor  404 Jun 14 10:53 authorized_keys
+[supervisor@node-1 .ssh]$
+
+
+[ansible@node-1 ~]$ systemctl status auditd
+● auditd.service - Security Auditing Service
+   Loaded: loaded (/usr/lib/systemd/system/auditd.service; enabled; vendor preset: enabled)
+   Active: active (running) since Sun 2020-06-14 09:21:07 UTC; 2h 0min ago
+     Docs: man:auditd(8)
+           https://github.com/linux-audit/audit-documentation
+  Process: 2649 ExecStartPost=/sbin/augenrules --load (code=exited, status=0/SUCCESS)
+  Process: 2636 ExecStart=/sbin/auditd (code=exited, status=0/SUCCESS)
+ Main PID: 2645 (auditd)
+   CGroup: /system.slice/auditd.service
+           └─2645 /sbin/auditd
+
+Warning: Journal has been rotated since unit was started. Log output is incomplete or unavailable.
+[ansible@node-1 ~]$
